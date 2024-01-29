@@ -1,0 +1,483 @@
+
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <list>
+#include <sstream>
+#include <string>
+#include <tuple>
+#include <vector>
+#define CATCH_CONFIG_ENABLE_BENCHMARK
+
+#include <chrono>
+
+
+#include "catch.hpp"
+
+// Output the elements of the given list as a comma
+// separated sequence.
+//
+//  os:     stream to use to generate the output
+//  l:      list that should be used to generate the output from
+template <typename T>
+void print_list(std::ostream& os, std::list<T> const& l)
+{
+    bool first = true;
+    for (auto it = l.begin(); it != l.end(); ++it)
+    {
+        if (!first)
+            os << ", ";
+        os << *it;
+        first = false;
+    }
+}
+
+PROVIDED_TEST("print_list utility tests")
+{
+    std::stringstream stm;
+
+    std::list<int> l;
+    l.push_back(1);
+    l.push_back(2);
+    l.push_back(3);
+    print_list(stm, l);
+
+    CHECK(stm.str() == "1, 2, 3");
+}
+
+// Create a list filled with the elements from the argument
+//
+//  values:     use the items stored in this argument to
+//              initialize the elements of the returned list
+template <typename T>
+std::list<T> create_list(std::vector<T> const& values)
+{
+    //Creates a empty list to store the values
+       std::list<T> result;
+ 
+   //Goes through each elements in the vector
+    for (const auto& value : values) {
+
+        //Add current value from the vector to end of the list
+        result.push_back(value);
+    }
+    
+    //Return the resulting list containing elements from vector
+    return result;
+
+}
+
+PROVIDED_TEST("create_list utility tests")
+{
+    std::stringstream stm;
+
+    std::list<int> l = create_list(std::vector<int>{1, 2, 3});
+    print_list(stm, l);
+
+    CHECK(stm.str() == "1, 2, 3");
+}
+
+STUDENT_TEST("more create_list utility tests")
+{
+    // Test with a vector of strings
+    std::vector<std::string> string_values{"apple", "banana", "orange"};
+    std::list<std::string> string_list = create_list(string_values);
+    std::stringstream string_stm;
+    print_list(string_stm, string_list);
+    CHECK(string_stm.str() == "apple, banana, orange");
+
+    // Test with an empty vector
+    std::vector<double> empty_values;
+    std::list<double> empty_list = create_list(empty_values);
+    std::stringstream empty_stm;
+    print_list(empty_stm, empty_list);
+    CHECK(empty_stm.str() == "");
+}
+
+// Compare the given list and vector arguments and return whether both
+// hold the same elements in the same order
+//
+//  l:          list to compare with the values
+//  values:     values to compare with the list elements
+template <typename T>
+bool are_equivalent(std::list<T> const& l, std::vector<T> const& values)
+{
+    //Check if sizes of the list and vector are different
+    if (l.size() != values.size()) {
+        // Different sizes, not equivalent
+        return false;
+    }
+
+   //Initilize iterators for the list and vectors
+    auto list_it = l.begin();
+    auto values_it = values.begin();
+
+    //Goes through both the list and vector at the sametime
+    while (list_it != l.end() && values_it != values.end()) {
+
+        //Compare current elements of list and vectors 
+        if (*list_it != *values_it) {
+            // Elements are not equal, lists are not equivalent
+            return false;
+        }
+      
+       //Move to next element in both list and vector
+        ++list_it;
+        ++values_it;
+    }
+
+    // When we reached here, all elements are equal in the same order
+    return true;
+    
+}
+
+PROVIDED_TEST("are_equivalent utility tests")
+{
+    std::vector<int> v = {1, 2, 3};
+    CHECK(are_equivalent(create_list(v), v));
+}
+
+STUDENT_TEST("more are_equivalent utility tests")
+{
+    // Test with equivalent list and vector of integers
+    std::list<int> int_list{1, 2, 3, 4, 5};
+    std::vector<int> int_values{1, 2, 3, 4, 5};
+    CHECK(are_equivalent(int_list, int_values));
+
+    // Test with non-equivalent list and vector of doubles
+    std::list<double> double_list{1.1, 2.2, 3.3};
+    std::vector<double> double_values{1.1, 2.2, 3.4};  // Different last element
+    CHECK(!are_equivalent(double_list, double_values));
+
+    // Test with empty list and vector
+    std::list<char> empty_list;
+    std::vector<char> empty_values;
+    CHECK(are_equivalent(empty_list, empty_values));
+}
+// Split given list 'l' into three sub-lists: each holding elements
+// that are strictly less, equal, and greater than the 'pivot' value,
+// respectively.
+template <typename T>
+std::tuple<std::list<T>, std::list<T>, std::list<T>> partition(
+    std::list<T>& l, T const& pivot)
+{
+    // Create the tuple as a whole and use structured bindings to get
+    // access to the elements of the tuple by reference.
+    std::tuple<std::list<T>, std::list<T>, std::list<T>> result;
+    auto& [less, equal, greater] = result;
+   
+   //Iterator to pass through the original list
+    auto it = l.begin();
+
+    //Iterator through the original list and categorize the elements into three list
+    while (it != l.end())
+    {
+        if (*it < pivot)
+        {
+            //Move the elements to 'less' list
+            less.splice(less.end(), l, it++);
+        }
+        else if (*it == pivot)
+        {
+            //Move the elements to 'less' list
+            equal.splice(equal.end(), l, it++);
+        }
+        else
+        {
+            //Move the elements to 'greater' list
+            greater.splice(greater.end(), l, it++);
+        }
+    }
+
+    // Return tuple of the three result lists
+    return result;
+}
+
+PROVIDED_TEST("partition tests")
+{
+    std::list<int> l = create_list(std::vector<int>{23, 3, 7, 4, 42, 13});
+    auto [less, equal, greater] = partition(l, 23);
+
+    CHECK(are_equivalent(less, {3, 7, 4, 13}));
+    CHECK(are_equivalent(equal, {23}));
+    CHECK(are_equivalent(greater, {42}));
+}
+
+STUDENT_TEST("more partition tests")
+{
+     // Test 1: Partitioning an empty list
+    std::list<int> emptyList;
+    auto [less1, equal1, greater1] = partition(emptyList, 5);
+    CHECK(less1.empty());
+    CHECK(equal1.empty());
+    CHECK(greater1.empty());
+
+    // Test 2: Partitioning a list with all elements equal to the pivot
+    std::list<int> allEqualList = {5, 5, 5, 5, 5};
+    auto [less2, equal2, greater2] = partition(allEqualList, 5);
+    CHECK(less2.empty());
+    CHECK(equal2 == std::list<int>{5, 5, 5, 5, 5});
+    CHECK(greater2.empty());
+
+    // Test 3: Partitioning a list with random values
+    std::list<int> randomList = {3, 6, 2, 8, 5, 1, 7};
+    auto [less3, equal3, greater3] = partition(randomList, 5);
+    CHECK(less3 == std::list<int>{3, 2, 1});
+    CHECK(equal3 == std::list<int>{5});
+    CHECK(greater3 == std::list<int>{6, 8, 7});
+}
+
+// Transfer all elements of the three argument lists to the result
+// list
+template <typename T>
+std::list<T> concatenate(
+    std::list<T>& one, std::list<T>& two, std::list<T>& three)
+{
+    //Create new line list to store the connected elements
+    std::list<T> result;
+
+    // Transfer elements from the three lists to the result list
+    result.splice(result.end(), one);
+    result.splice(result.end(), two);
+    result.splice(result.end(), three);
+
+   //Return resulting list containing elements the three list
+    return result;
+
+}
+
+PROVIDED_TEST("concatenate tests")
+{
+    std::list<int> l1 = create_list(std::vector<int>{3, 4, 7, 13});
+    std::list<int> l2 = create_list(std::vector<int>{23});
+    std::list<int> l3 = create_list(std::vector<int>{42});
+    CHECK(are_equivalent(concatenate(l1, l2, l3), {3, 4, 7, 13, 23, 42}));
+}
+
+STUDENT_TEST("more concatenate tests")
+{
+     // Test 1: Concatenating three non-empty lists
+    std::list<int> list1 = {1, 2, 3};
+    std::list<int> list2 = {4, 5, 6};
+    std::list<int> list3 = {7, 8, 9};
+
+    auto concatenated1 = concatenate(list1, list2, list3);
+    CHECK(concatenated1 == std::list<int>{1, 2, 3, 4, 5, 6, 7, 8, 9});
+    CHECK(list1.empty());
+    CHECK(list2.empty());
+    CHECK(list3.empty());
+
+    // Test 2: Concatenating with one empty list
+    std::list<char> emptyList;
+    std::list<char> nonEmptyList = {'a', 'b', 'c'};
+
+    auto concatenated2 = concatenate(emptyList, nonEmptyList, emptyList);
+    CHECK(concatenated2 == std::list<char>{'a', 'b', 'c'});
+    CHECK(emptyList.empty());
+    CHECK(nonEmptyList.empty());
+
+    // Test 3: Concatenating with all empty lists
+    std::list<std::string> emptyList1;
+    std::list<std::string> emptyList2;
+    std::list<std::string> emptyList3;
+
+    auto concatenated3 = concatenate(emptyList1, emptyList2, emptyList3);
+    CHECK(concatenated3.empty());
+    CHECK(emptyList1.empty());
+    CHECK(emptyList2.empty());
+    CHECK(emptyList3.empty());
+}
+
+// Use the quicksort algorithm to sort the given argument list. This
+// function returns the sorted list
+template <typename T>
+std::list<T> quick_sort(std::list<T>& l)
+{
+    std::list<T> result;
+
+      if (l.size() <= 1)
+    {
+        // The base case list is already sorted
+        return l;
+    }
+
+    // Choose a pivot value (using the first element for simplicity)
+    T pivot = l.front();
+
+    // Divide the list into three sub-lists
+    auto [less, equal, greater] = partition(l, pivot);
+
+    // Recursively sort the less and greater sub-lists
+    less = quick_sort(less);
+    greater = quick_sort(greater);
+
+    // Putsthe sorted sub-lists togther
+    return concatenate(less, equal, greater);
+}
+
+PROVIDED_TEST("quick_sort tests")
+{
+    std::list<int> l = create_list(std::vector<int>{23, 3, 7, 4, 42, 13});
+    CHECK(are_equivalent(quick_sort(l), std::vector<int>{3, 4, 7, 13, 23, 42}));
+}
+
+STUDENT_TEST("more quick_sort tests")
+{
+    // Test 1: Sorting an already sorted list
+    std::list<int> sortedList = create_list(std::vector<int>{1, 2, 3, 4, 5});
+    CHECK(are_equivalent(quick_sort(sortedList), std::vector<int>{1, 2, 3, 4, 5}));
+
+    // Test 2: Sorting a reverse-sorted list
+    std::list<int> reverseSortedList = create_list(std::vector<int>{5, 4, 3, 2, 1});
+    CHECK(are_equivalent(quick_sort(reverseSortedList), std::vector<int>{1, 2, 3, 4, 5}));
+
+    // Test 3: Sorting a list with duplicate elements
+    std::list<int> duplicateList = create_list(std::vector<int>{3, 2, 5, 2, 1, 5, 3});
+    CHECK(are_equivalent(quick_sort(duplicateList), std::vector<int>{1, 2, 2, 3, 3, 5, 5}));
+
+    // Test 4: Sorting an empty list
+    std::list<int> emptyList;
+    CHECK(are_equivalent(quick_sort(emptyList), std::vector<int>{}));
+
+    // Test 5: Sorting a list with one element
+    std::list<int> singleElementList = create_list(std::vector<int>{42});
+    CHECK(are_equivalent(quick_sort(singleElementList), std::vector<int>{42}));
+
+    // Test 6: Sorting a list with negative numbers
+    std::list<int> negativeList = create_list(std::vector<int>{-5, 8, -2, 0, 3, -1});
+    CHECK(are_equivalent(quick_sort(negativeList), std::vector<int>{-5, -2, -1, 0, 3, 8}));
+
+    // Test 7: Sorting a list of characters
+    std::list<char> charList = create_list(std::vector<char>{'c', 'a', 'b', 'd'});
+    CHECK(are_equivalent(quick_sort(charList), std::vector<char>{'a', 'b', 'c', 'd'}));
+
+    // Test 8: Sorting a list of strings
+    std::list<std::string> stringList = create_list(std::vector<std::string>{"apple", "orange", "banana"});
+    CHECK(are_equivalent(quick_sort(stringList), std::vector<std::string>{"apple", "banana", "orange"}));
+
+    // Test 9: Sorting a list with floating-point numbers
+    std::list<double> doubleList = create_list(std::vector<double>{3.14, 1.1, 2.2, 0.5});
+    CHECK(are_equivalent(quick_sort(doubleList), std::vector<double>{0.5, 1.1, 2.2, 3.14}));
+
+    // Test 10: Sorting a large random list
+    std::list<int> largeRandomList1 = {5, 2, 8, 1, 3, 7, 4, 6};
+    CHECK(are_equivalent(quick_sort(largeRandomList1), std::vector<int>{1, 2, 3, 4, 5, 6, 7, 8}));
+}
+
+template <typename T>
+std::list<T> split_run(std::list<T>& l)
+{
+    std::list<T> result;
+
+    // If the input list is empty, it return an empty list
+    if (l.empty()) {
+        return result;
+    }
+
+    // Pass through to the last node in the sorted run
+    auto it = l.begin();
+    while (it != --l.end() && *it <= *(std::next(it))) {
+        ++it;
+    }
+
+    // Splice the remainder into an empty remainder list
+    result.splice(result.begin(), l, it, l.end());
+
+    return result;
+}
+
+template <typename T>
+std::list<T> merge(std::list<T>& list1, std::list<T>& list2)
+{
+    std::list<T> result;
+
+    // Goes through until one of the lists becomes empty
+    while (!list1.empty() && !list2.empty()) {
+        if (list1.front() <= list2.front()) {
+            result.splice(result.end(), list1, list1.begin());
+        } else {
+            result.splice(result.end(), list2, list2.begin());
+        }
+    }
+
+    // If there are any remaining elements in list1, splice them into the result
+    result.splice(result.end(), list1);
+
+    // If there are any remaining elements in list2, splice them into the result
+    result.splice(result.end(), list2);
+
+    return result;
+}
+
+template <typename T>
+std::list<T> run_sort(std::list<T>& l)
+{
+    std::list<T> result;
+
+    while (!l.empty()) {
+        // Split a sorted run from the remaining input list
+        std::list<T> run = split_run(l);
+
+        // Merge the run into the result
+        result = merge(result, run);
+    }
+
+    return result;
+}
+
+//Test for average case for quick_sort
+STUDENT_TEST("Time quick sort") {
+    const int N = 10000;
+    std::list<int> List;
+    std::vector<int> Vector;
+
+    //Generates random numbers using more strong random numbers 
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(1, 1000);
+
+    for (int i = 0; i < N; ++i) {
+        int num = dis(gen);
+        List.push_back(num);
+        Vector.push_back(num);
+    }
+
+    // Measure the time for average case quick_sort on List
+auto start_time_list = std::chrono::high_resolution_clock::now();
+quick_sort(List);
+auto end_time_list = std::chrono::high_resolution_clock::now();
+std::chrono::duration<double, std::milli> listDuration = end_time_list - start_time_list;
+
+//Measure the time for average case std::sort on Vector
+auto start_time_vector = std::chrono::high_resolution_clock::now();
+std::sort(Vector.begin(), Vector.end());
+auto end_time_vector = std::chrono::high_resolution_clock::now();
+std::chrono::duration<double, std::milli> vectorDuration = end_time_vector - start_time_vector;
+
+//Print results for the average test case
+std::cout << "sorting " << N << "elements with quick_sort took: " << listDuration.count() << " milliseconds" << std::endl;
+std::cout << "sorting " << N << "elements with std::sort on vector took: " << listDuration.count() << " milliseconds" << std::endl;
+
+}
+
+//Test for worst case quick_sort
+STUDENT_TEST("Time worst case quick sort") {
+   const int N = 1000;
+    std::list<int> List;
+    std::vector<int> Vector;
+
+    // Construct a worst-case input for the quick_sort
+    for (int i = 0; i < N; ++i) {
+         // Elements in ascending order
+        List.push_back(i);  
+        Vector.push_back(i);
+    }
+     // Measure the time for worst-case quick_sort on List
+  auto start_time_list = std::chrono::high_resolution_clock::now();
+  quick_sort(List);
+  auto end_time_list = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double, std::milli> listDuration = end_time_list - start_time_list;
+
+//Print results for the worst case
+  std::cout << "sorting " << N << "quick_sort on worst-case: " << listDuration.count() << " milliseconds" << std::endl;
+}
