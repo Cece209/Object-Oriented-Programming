@@ -1,0 +1,755 @@
+#include <fstream>
+#include <iomanip>
+#include <set>
+#include <sstream>    // for std::stringstream
+#include <stack>
+#include <string>
+#include <vector>
+#include <queue>
+
+
+#include "catch.hpp"
+
+// a simple type representing a position in the grid
+struct grid_position
+{
+    int row;
+    int column;
+
+    friend bool operator==(grid_position const& lhs, grid_position const& rhs)
+    {
+        return lhs.row == rhs.row && lhs.column == rhs.column;
+    }
+
+    friend bool operator!=(grid_position const& lhs, grid_position const& rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bool operator<(grid_position const& lhs, grid_position const& rhs)
+    {
+        return lhs.row < rhs.row ||
+            (lhs.row == rhs.row && lhs.column < rhs.column);
+    }
+
+    // a > b --> !(b < a) || a == b
+    friend bool operator>(grid_position const& lhs, grid_position const& rhs)
+    {
+        return !(rhs < lhs) || lhs == rhs;
+    }
+
+    // a >= b --> !(b > a)
+    friend bool operator>=(grid_position const& lhs, grid_position const& rhs)
+    {
+        return !(lhs < rhs);
+    }
+
+    // a <= b ==> !(b < a)
+    friend bool operator<=(grid_position const& lhs, grid_position const& rhs)
+    {
+        return !(rhs < lhs);
+    }
+
+    // input/output helper functions for grid_position
+    friend std::istream& operator>>(std::istream& strm, grid_position& pos)
+    {
+        char c1, c2;
+        strm >> c1 >> pos.row >> c2 >> pos.column;
+        if (c1 != 'r' || c2 != 'c')
+        {
+            throw std::runtime_error("unrecognized format for grid_position");
+        }
+        return strm;
+    }
+
+    friend std::ostream& operator<<(
+        std::ostream& strm, grid_position const& pos)
+    {
+        strm << 'r' << pos.row << 'c' << pos.column;
+        return strm;
+    }
+};
+
+// a simple grid type used to represent the maze
+template <typename T>
+class grid
+{
+public:
+    grid(int size_x, int size_y, T init = T())
+      : data(size_x * size_y, init)
+      , columns(size_x)
+      , rows(size_y)
+    {
+    }
+
+    decltype(auto) operator[](grid_position const& pos)
+    {
+        return data[pos.column + pos.row * num_columns()];
+    }
+    decltype(auto) operator[](grid_position const& pos) const
+    {
+        return data[pos.column + pos.row * num_columns()];
+    }
+
+    int num_columns() const
+    {
+        return columns;
+    }
+    int num_rows() const
+    {
+        return rows;
+    }
+
+private:
+    std::vector<T> data;
+    int columns;
+    int rows;
+};
+
+// read a maze description from a file
+grid<bool> read_maze_from_file(std::string const& filename)
+{
+    // open file and verify that it was found
+    std::ifstream strm(filename);
+    if (!strm.is_open())
+    {
+        throw std::runtime_error("can't open file: " + filename);
+    }
+
+    // first read first line of file to extract the sizes of the maze
+    int rows = 0, columns = 0;
+    strm >> rows >> columns;
+    if (rows == 0 || columns == 0)
+    {
+        throw std::runtime_error("unrecognized file format: " + filename);
+    }
+
+    // now read the maze data character by character
+    grid<bool> maze(columns, rows);
+    char c;
+
+    std::noskipws(strm);    // prevent stream from skipping whitespace
+    strm >> c;              // skip '\n'
+
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < columns; ++x)
+        {
+            strm >> c;
+            maze[grid_position{y, x}] = (c == ' ') ? true : false;
+        }
+        strm >> c;    // skip '\n'
+    }
+
+    return maze;
+}
+
+PROVIDED_TEST("verify reading maze file")
+{
+    grid<bool> g = read_maze_from_file("../mazes/maze11x11.txt");
+    CHECK(g.num_columns() == 11);
+    CHECK(g.num_rows() == 11);
+
+    // test two arbitrary grid elements
+    CHECK(!g[grid_position{0, 0}]);
+    CHECK(g[grid_position{1, 2}]);
+}
+
+// read a solution for a maze from a file
+std::vector<grid_position> read_solution_from_file(std::string const& filename)
+{
+    // open file and verify that it was found
+    std::ifstream strm(filename);
+    if (!strm.is_open())
+    {
+        throw std::runtime_error("can't open file: " + filename);
+    }
+
+    // first read first line of file to extract the sizes of the maze
+    int positions = 0;
+    strm >> positions;
+    if (positions == 0)
+    {
+        throw std::runtime_error("unrecognized file format: " + filename);
+    }
+
+    std::vector<grid_position> path;
+    path.reserve(positions);
+
+    while (--positions >= 0)
+    {
+        grid_position pos;
+        if (!(strm >> pos))
+        {
+            throw std::runtime_error("unrecognized file format: " + filename);
+        }
+        path.push_back(pos);
+    }
+
+    return path;
+}
+
+PROVIDED_TEST("verify reading solutions file")
+{
+    std::vector<grid_position> path =
+        read_solution_from_file("../mazes/maze11x11.solution");
+
+    std::vector<grid_position> expected = {grid_position{1, 1},
+        grid_position{1, 2}, grid_position{1, 3}, grid_position{1, 4},
+        grid_position{1, 5}, grid_position{1, 6}, grid_position{1, 7},
+        grid_position{1, 8}, grid_position{1, 9}, grid_position{2, 9},
+        grid_position{3, 9}, grid_position{4, 9}, grid_position{5, 9},
+        grid_position{6, 9}, grid_position{7, 9}, grid_position{8, 9},
+        grid_position{9, 9}};
+
+    CHECK(path == expected);
+}
+
+// print given maze to stream
+void print_maze_line_to_stream(
+    std::ostream& strm, grid<bool> const& maze, int y)
+{
+    for (int x = 0; x < maze.num_columns(); ++x)
+    {
+        strm << (maze[grid_position{y, x}] ? " " : (x & 1 ? "-" : "+"));
+    }
+    strm << "\n";
+
+    for (int x = 0; x < maze.num_columns(); ++x)
+    {
+        strm << (maze[grid_position{y + 1, x}] ? " " : "|");
+    }
+    strm << "\n";
+}
+
+void print_to_stream(std::ostream& strm, grid<bool> const& maze)
+{
+    for (int y = 0; y < maze.num_rows() - 1; y += 2)
+    {
+        print_maze_line_to_stream(strm, maze, y);
+    }
+
+    for (int x = 0; x < maze.num_columns(); ++x)
+    {
+        strm << (maze[grid_position{maze.num_rows() - 1, x}] ?
+                " " :
+                (x & 1 ? "-" : "+"));
+    }
+    strm << "\n";
+}
+
+char const* maze11x11 = R"(
++-+-+-+-+-+
+|         |
++-+-+-+-+ +
+|       | |
++ +-+-+ + +
+| |   | | |
++ + + + + +
+| | |   | |
++ +-+-+-+ +
+|         |
++-+-+-+-+-+
+)";
+
+PROVIDED_TEST("verify maze printing")
+{
+    std::stringstream strm;
+    strm << '\n';    // account for additional leading '\n' in maze11x11
+
+    print_to_stream(strm, read_maze_from_file("../mazes/maze11x11.txt"));
+    CHECK(maze11x11 == strm.str());
+}
+
+// Given a maze represented as a `grid<bool>` and a current `grid_position`
+// cur, this function returns a `std::set` of all valid moves from `cur`.
+std::set<grid_position> generate_valid_moves(
+    grid<bool> const& maze, grid_position const& cur)
+{
+    //Sets store vaild move
+    std::set<grid_position> valid_moves;
+
+    //Check the moves in vertical directions 
+     for (int row_offset : {-1, 1}) {
+        //Calculates the new position  
+        grid_position new_pos{cur.row + row_offset, cur.column};
+        //Check if the new position is within bound, and is not a wall
+        if (new_pos.row >= 0 && new_pos.row < maze.num_rows() &&
+            maze[new_pos])
+            //Add new position to vaild moves
+            valid_moves.insert(new_pos);
+    }
+    //Check the moves in horizontal directions 
+    for (int col_offset : {-1, 1}) {
+        //Calculates the new position
+        grid_position new_pos{cur.row, cur.column + col_offset};
+         //Check if the new position is within bound, and is not a wall
+        if (new_pos.column >= 0 && new_pos.column < maze.num_columns() &&
+            maze[new_pos])
+            //Add new position to vaild moves
+            valid_moves.insert(new_pos);
+    }
+
+    return valid_moves;
+}
+
+PROVIDED_TEST("verifying generating valid moves from given position")
+{
+    grid<bool> maze = read_maze_from_file("../mazes/maze11x11.txt");
+    std::set<grid_position> valid_moves =
+        generate_valid_moves(maze, grid_position{1, 1});
+
+    // we know there is just one possible move
+    CHECK(valid_moves.size() == 1);
+
+    // current position should not be part of valid moves
+    CHECK(valid_moves.find(grid_position{1, 1}) == valid_moves.end());
+
+    // we know that grid_position{1, 2} should be a valid move
+    CHECK(valid_moves.find(grid_position{1, 2}) != valid_moves.end());
+}
+
+STUDENT_TEST("More comprehensive verification of generating valid moves")
+{
+    {
+        // Test Case 1
+        grid<bool> maze = read_maze_from_file("../mazes/maze11x11.txt");
+        std::set<grid_position> valid_moves = generate_valid_moves(maze, grid_position{0, 0});
+        CHECK(valid_moves.empty());
+    }
+    {
+        // Test Case 2
+        grid<bool> maze = read_maze_from_file("../mazes/maze11x11.txt");
+        std::set<grid_position> valid_moves = generate_valid_moves(maze, grid_position{10, 10});
+        CHECK(valid_moves.empty());
+    }
+    {
+        // Test Case 3
+        grid<bool> maze = read_maze_from_file("../mazes/maze11x11.txt");
+        std::set<grid_position> valid_moves = generate_valid_moves(maze, grid_position{5, 5});
+        CHECK(valid_moves.size() == 2);
+    }
+}
+// The function `validate_path` completes successfully (returns `true`) if
+// all of the criteria for a valid solution are met. If it instead detects
+// that the path violates one of the constraints as outlined in the
+// assignment description, `validate_path`  should return `false`.
+bool validate_path(
+       grid<bool> const& maze, std::vector<grid_position> const& path)
+        {
+            //Check if path is empty
+        if (path.empty()) 
+        return false;
+    //Define start and end positions
+    grid_position start{1, 1};
+    grid_position end{maze.num_rows() - 2, maze.num_columns() - 2};
+    //Check if the path starts and end at the correct positions
+    if (path.front() != start || path.back() != end) 
+        return false;
+    //Set store to visited positions 
+    std::set<grid_position> count_positions;
+    count_positions.insert(start);
+    //Goes through the path to check for the vaild moves and repeats positions 
+    for (size_t i = 0; i < path.size() - 1; i++) 
+    {
+        //Current and next positions in the path
+        auto current_pos = path[i];
+        auto next_pos = path[i + 1];
+
+        // Check if the current position is within bounds and not the wall
+        if (current_pos.row < 0 || current_pos.row >= maze.num_rows() ||
+            current_pos.column < 0 || current_pos.column >= maze.num_columns() ||
+            !maze[current_pos]) 
+        {
+            return false;
+        }
+
+        // Check if the next position is a valid move from the current position
+        auto valid_moves = generate_valid_moves(maze, current_pos);
+        if (valid_moves.find(next_pos) == valid_moves.end()) 
+            return false;
+
+        // Check for repeated positions in the path
+        if (count_positions.count(next_pos) > 0) 
+            return false;
+
+        count_positions.insert(next_pos);
+    }
+
+    return true;
+}
+      
+PROVIDED_TEST("verifying validity of given solution path")
+{
+    grid<bool> maze = read_maze_from_file("../mazes/maze11x11.txt");
+    std::vector<grid_position> path =
+        read_solution_from_file("../mazes/maze11x11.solution");
+
+    CHECK(validate_path(maze, path));
+}
+
+STUDENT_TEST("More comprehensive verification of path validity")
+{ 
+ {
+    //Test case 1
+     grid<bool> maze(3, 3, false);
+    std::vector<grid_position> path = {{0, 0}, {0, 1}, {1, 1}, {2, 1}, {2, 2}};
+
+    CHECK(!validate_path(maze, path));
+    std::cout << "STUDENT_TEST 1 Passed\n";
+ }
+ {
+    //Test case 2
+    grid<bool> maze(3, 3, false);
+    std::vector<grid_position> path = {{0, 0}, {0, 1}, {1, 1}, {2, 1}, {1, 1}};
+
+    CHECK(!validate_path(maze, path));
+    std::cout << "STUDENT_TEST 2 Passed\n";
+ }
+ {
+
+    //Test case 3
+    grid<bool> maze(3, 3, false);
+    std::vector<grid_position> path = {{0, 0}, {0, 1}, {1, 1}, {1, 1}, {2, 2}, {2, 3}};
+
+    CHECK(!validate_path(maze, path));
+    std::cout << "STUDENT_TEST 3 Passed\n";
+}
+}
+
+// Find the number of occurrences of a given grid_position contained in a
+// given solution path
+int count_known_positions(
+    grid_position const& pos, std::vector<grid_position> const& p)
+{
+    // Sort the path to use std::equal_range efficiently
+    std::vector<grid_position> sorted_path = p;
+    std::sort(sorted_path.begin(), sorted_path.end());
+
+    // Use std::equal_range to find the range of occurrences
+    auto range = std::equal_range(sorted_path.begin(), sorted_path.end(), pos);
+
+    // Calculating the number of occurrences
+    return std::distance(range.first, range.second);
+}
+
+PROVIDED_TEST("testing of a given position comprises a valid next step")
+{
+    std::vector<grid_position> path =
+        read_solution_from_file("../mazes/maze11x11.solution");
+
+    CHECK(1 == count_known_positions(grid_position{1, 1}, path));
+    CHECK(0 == count_known_positions(grid_position{0, 0}, path));
+}
+
+STUDENT_TEST("More testing of a given position comprises a valid next step")
+{
+    {
+        //Test case 1
+    std::vector<grid_position> path =
+        read_solution_from_file("../mazes/maze11x11.solution");
+
+    CHECK(0 == count_known_positions(grid_position{3, 4}, path));
+    CHECK(0 == count_known_positions(grid_position{0, 0}, path));
+}
+{
+    //Test case 2
+    std::vector<grid_position> path =
+        read_solution_from_file("../mazes/maze11x11.solution");
+
+    CHECK(0 == count_known_positions(grid_position{5, 6}, path));
+    CHECK(0 == count_known_positions(grid_position{0, 0}, path));
+}
+{
+    //Test case 3
+    std::vector<grid_position> path =
+        read_solution_from_file("../mazes/maze11x11.solution");
+
+    CHECK(0 == count_known_positions(grid_position{10, 10}, path));
+    CHECK(0 == count_known_positions(grid_position{0, 0}, path));
+}
+}
+
+// Solve the given maze by finding the shortest solution path for it.
+// Use the breadth-first search algorithm.
+std::vector<grid_position> solve_maze_bfs(grid<bool> const& maze)
+{
+   // Creates an empty stack of paths
+    std::queue<std::vector<grid_position>> paths;
+
+    // Creates a length one path containing just starting location
+    std::vector<grid_position> initialPath = {grid_position{1, 1}};
+
+    // Push the initial path onto the stack
+    paths.push(initialPath);
+
+    // Exit position
+    grid_position exit{maze.num_rows() - 2, maze.num_columns() - 2};
+
+    // While there are still more paths to explore (the stack is not empty)
+    while (!paths.empty())
+    {
+        // Pop the current path from the stack
+        std::vector<grid_position> currentPath = paths.front();
+        paths.pop();
+
+        // Get the current position from the last element of the current path
+        grid_position currentPos = currentPath.back();
+
+        // If the current path ends at the exit
+        if (currentPos == exit)
+        {
+            // Returns the current path as the solution. 
+            return currentPath;
+        }
+
+        // Generate valid moves from the current position
+        std::set<grid_position> neighbors = generate_valid_moves(maze, currentPos);
+
+        // For each valid neighbor
+        for (const grid_position& neighbor : neighbors)
+        {
+            // Check to see if the neighbor is not already visited
+            if (std::find(currentPath.begin(), currentPath.end(), neighbor) == currentPath.end())
+            {
+                // Make a copy of the current path and extend it by adding the next valid neighbor
+                std::vector<grid_position> newPath = currentPath;
+                newPath.push_back(neighbor);
+
+                // Push the new path onto the stack
+                paths.push(newPath);
+            }
+        }
+    }
+
+    // If it completes without finding a solution, return an empty path
+    return {};
+}
+
+
+PROVIDED_TEST("verifying solving maze using breadth-first search")
+{
+    grid<bool> maze = read_maze_from_file("../mazes/maze11x11.txt");
+    std::vector<grid_position> expected_path =
+        read_solution_from_file("../mazes/maze11x11.solution");
+
+    std::vector<grid_position> path = solve_maze_bfs(maze);
+
+    CHECK(validate_path(maze, path));
+    CHECK(expected_path == path);
+}
+
+STUDENT_TEST("More verifying solving maze using breadth-first search")
+{
+      {
+        //Test case 1
+        grid<bool> maze(4, 4, false);
+        std::vector<grid_position> path = solve_maze_bfs(maze);
+        CHECK(path.empty());
+    }
+    {
+        //Test case 2
+        grid<bool> maze(5, 5, true);
+        std::vector<grid_position> path = solve_maze_bfs(maze);
+        CHECK(!path.empty());
+        CHECK(validate_path(maze, path));
+    }
+}
+
+
+// Solve the given maze by finding a solution path for it. Use the
+// depth-first search algorithm.
+std::vector<grid_position> solve_maze_dfs(grid<bool> const& maze)
+{
+   // Create an empty stack of paths
+    std::stack<std::vector<grid_position>> paths;
+
+    // Create a length one path containing just the starting location
+    std::vector<grid_position> initialPath = {grid_position{1, 1}};
+
+    // Pushs the initial path onto the stack
+    paths.push(initialPath);
+
+    // Exit position
+    grid_position exit{maze.num_rows() - 2, maze.num_columns() - 2};
+
+    // While there are still more paths to explore (the stack is not empty)
+    while (!paths.empty())
+    {
+        // Pop the current path from the stack
+        std::vector<grid_position> currentPath = paths.top();
+        paths.pop();
+
+        // Get the current position from the last element of the current path
+        grid_position currentPos = currentPath.back();
+
+        // If the current path ends at the exit
+        if (currentPos == exit)
+        {
+            // Return the current path as the solution.
+            return currentPath;
+        }
+
+        // Generate valid moves from the current position
+        std::set<grid_position> neighbors = generate_valid_moves(maze, currentPos);
+
+        // For each valid neighbor
+        for (const grid_position& neighbor : neighbors)
+        {
+            // Check if the neighbor is not already visited
+            if (std::find(currentPath.begin(), currentPath.end(), neighbor) == currentPath.end())
+            {
+                // Make a copy of the current path and extend it by adding the next viable neighbor
+                std::vector<grid_position> newPath = currentPath;
+                newPath.push_back(neighbor);
+
+                // Push the new path onto the stack
+                paths.push(newPath);
+            }
+        }
+    }
+
+    // If the loop completes without finding a solution, return an empty path
+    return {};
+}
+
+PROVIDED_TEST("verifying solving maze using depth-first search")
+{
+    grid<bool> maze = read_maze_from_file("../mazes/maze11x11.txt");
+    std::vector<grid_position> expected_path =
+        read_solution_from_file("../mazes/maze11x11.solution");
+
+    std::vector<grid_position> path = solve_maze_dfs(maze);
+
+    CHECK(validate_path(maze, path));
+    CHECK(expected_path == path);
+}
+
+STUDENT_TEST("More verifying solving maze using depth-first search")
+ {
+    {
+        //Test Case 1
+        grid<bool> maze(4, 4, false);
+        std::vector<grid_position> path = solve_maze_dfs(maze);
+        CHECK(path.empty());
+    }
+    {
+        //Test Case 2
+        grid<bool> maze(5, 5, true);
+        std::vector<grid_position> path = solve_maze_dfs(maze);
+        CHECK(!path.empty());
+        CHECK(validate_path(maze, path));
+    }
+}
+
+void print_maze_line_with_solution_to_stream(
+    std::ostream& strm, const grid<bool>& maze,
+    const std::vector<grid_position>& solution, int y)
+{
+     //Goes through each column in the maze
+    for (int x = 0; x < maze.num_columns(); ++x)
+    {
+        //Creates grid position for the current position 
+        grid_position currentPos{y, x};
+         // Count the occurrences of the current position in the solution
+        auto count = count_known_positions(currentPos, solution);
+         //Check if the current position in maze is vaild path
+        if (maze[currentPos])
+        {
+            //Check to see if the current position part of the solution
+            if (count > 0)
+            //Print '*' to indicate the solution path
+                strm << "*";
+            else
+            // Print ' ' for a regular path
+                strm << " ";
+        }
+        else
+        {
+            //Print '-' for horizontal walls or '+' for intersections
+            strm << (x & 1 ? "-" : "+");
+        }
+    }
+    strm << "\n";
+    //Goes through each column in the maze
+    for (int x = 0; x < maze.num_columns(); ++x)
+    {
+        //Creates grid position for the current row below
+        grid_position currentPos{y + 1, x};
+        // Count the occurrences of the current position in the solution
+        auto count = count_known_positions(currentPos, solution);
+        //Check if the current position in maze is vaild path
+        if (maze[currentPos])
+        {
+            //Check to see if the current position part of the solution
+            if (count > 0)
+            //Print '*' to indicate the solution path
+                strm << "*";
+            else
+             // Print ' ' for a regular path
+                strm << " ";
+        }
+        else
+        {
+            // Print '|' for vertical walls
+            strm << "|";
+        }
+    }
+    strm << "\n";
+}
+
+  void print_maze_with_solution_to_stream(
+    std::ostream& strm, const grid<bool>& maze,
+    const std::vector<grid_position>& solution)
+{
+     // Goes through each row of the maze. Also, excluding the last row
+    for (int y = 0; y < maze.num_rows() - 1; y += 2)
+    {
+        // Prints a line of the maze with the solution for the current row
+        print_maze_line_with_solution_to_stream(strm, maze, solution, y);
+    }
+    // Goes through each column in the last row of the maze
+    for (int x = 0; x < maze.num_columns(); ++x)
+    {
+        // Creates a grid_position for current position in last row
+        grid_position currentPos{maze.num_rows() - 1, x};
+        // Count the occurrences of the current position in the solution
+        auto count = count_known_positions(currentPos, solution);
+       //Check if the current position in maze is vaild path
+        if (maze[currentPos])
+        {
+             //Check to see if the current position part of the solution
+            if (count > 0)
+             // Print '*' to indicate the solution path
+                strm << "*";
+            else
+            // Print ' ' for a regular path
+                strm << " ";
+        }
+        else
+        {
+             // Print '-' for horizontal walls or '+' for intersections
+            strm << (x & 1 ? "-" : "+");
+        }
+    }
+    strm << "\n";
+}
+
+STUDENT_TEST("Printing maze with solution overlay")
+{
+    // Test Case 1
+    grid<bool> maze(5, 5, true);
+
+    maze[grid_position{1, 1}] = false;
+    maze[grid_position{1, 3}] = false;
+    maze[grid_position{3, 1}] = false;
+    maze[grid_position{3, 3}] = false;
+
+    std::vector<grid_position> solution = solve_maze_bfs(maze);
+
+    std::cout << "Original Maze:\n";
+    print_to_stream(std::cout, maze);
+ 
+    std::cout << "\nMaze with Solution Overlay:\n";
+    print_maze_with_solution_to_stream(std::cout, maze, solution);
+}
