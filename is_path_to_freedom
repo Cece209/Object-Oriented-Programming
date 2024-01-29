@@ -1,0 +1,87 @@
+
+#include <string>
+#include <iostream>
+#include <string>
+#include <set>
+
+#include "labyrinth.hpp"
+
+// This function checks whether the path given will be valid, i.e., 
+// whether it helps you escaping the labyrinth as described in the
+// instructions
+//
+//      start:  An iterator pointing to the maze_cell you should
+//              start escaping from.
+//      end:    An iterator you can use to compare against the
+//              iterators held by a maze_cell. If your iterator
+//              compares equal to this then there is no connection
+//              to another cell along the given direction.
+//      moves:  A sequence of characters 'N', 'S', 'E', and 'W'
+//              describing the path out of the labyrinth to check
+//              for validity.
+//
+// This function should return 'true' if the given path is valid
+// and 'false' otherwise.
+
+
+bool is_path_to_freedom(
+    maze_iterator start, maze_iterator end, std::string const& moves)
+{
+    // Maze is empty, cannot escape
+    if (start == end) {
+        return false;  
+    }
+  
+  // To keep track of gathered items
+   std::set<maze_item> gathered_items;  
+
+   //Gathers item from the start position
+   if (start->whats_here != maze_item::nothing) {
+        gathered_items.insert(start->whats_here);
+    }
+
+   //Goes through the moves and check if the vaild moves
+    for (char move : moves) {
+       
+        // Check to see is the move is valid and update the position
+        switch (move) {
+            case 'N':
+                if (start->north == end) {
+                    return false; //Invalid move, cannot escape 
+                }
+                start = start->north;
+                break;
+            case 'S':
+                if (start->south == end) {
+                    return false; //Invalid move, cannot escape 
+                }
+                start = start->south;
+                break;
+            case 'E':
+                if (start->east == end) {
+                    return false; //Invalid move, cannot escape 
+                }
+                start = start->east;
+                break;
+            case 'W':
+                if (start->west == end) {
+                    return false; //Invalid move, cannot escape 
+                }
+                
+                //Gathers the items along the paths 
+                start = start->west;
+                break;
+            default:
+                return false;  // Invalid move character
+        }
+        // Gather items along the path
+        if (start->whats_here != maze_item::nothing) {
+            gathered_items.insert(start->whats_here);
+        }
+    }
+
+    // Check if all the required items are gathered
+    return (gathered_items.count(maze_item::spellbook) > 0) &&
+           (gathered_items.count(maze_item::potion) > 0) &&
+           (gathered_items.count(maze_item::wand) > 0);
+}
