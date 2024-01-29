@@ -1,0 +1,332 @@
+
+#include <queue>
+#include <vector>
+
+#include "catch.hpp"
+
+//Helper function to check of a queue is sorted 
+bool isSorted(const std::queue<int>& q) {
+    //If the size of the queue is 0 or 1, it will be considered sorted
+    if (q.size() <= 1) {
+        return true;  
+    }
+    //Initialize a variable to store the previous elements value and creates a temporary queue as a copy of original queue
+    int prev = q.front();
+    std::queue<int> temp(q);
+    //Remove the first element from the temporary queue
+    temp.pop(); 
+   //Iterate through the elements in the temporary queue and
+   //if current element is less than previous element, it is not sorted
+    while (!temp.empty()) {
+        if (temp.front() < prev) {
+            return false;  
+        }
+      //Update to previous element and remove current element from temporary queue
+        prev = temp.front();
+        temp.pop();
+    }
+   //If it loop complete without returning false, then it is sorted
+    return true;  
+}
+
+//checking if the input queues are sorted
+std::queue<int> binary_merge(std::queue<int> one, std::queue<int> two) {
+    //Checks if queues are sorted
+        if (!isSorted(one) || !isSorted(two)) {
+        throw std::runtime_error("Input queues are not sorted");
+    }
+    //Create new queue to store the merge result
+    std::queue<int> result; 
+    //Merge the two input queues is sorted order, compare front elements of two queues, and
+    //if element from first queue is smaller, push to result
+    while (!one.empty() && !two.empty()) {
+        if (one.front() < two.front()) {
+            result.push(one.front());
+            one.pop();
+            //If element from second queue is smaller or equal, push to result
+        } else {
+            result.push(two.front());
+            two.pop();
+        }
+    }
+   //After one queue is exhausted, push remaining elements from non-empty queue
+    while (!one.empty()) {
+        result.push(one.front());
+        one.pop();
+    }
+
+    while (!two.empty()) {
+        result.push(two.front());
+        two.pop();
+    }
+    //return the merged and sorted result queue
+    return result;
+}
+
+       STUDENT_TEST("binary_merge") {
+      {
+        //Merging two non-empty queues in ascending order
+          std::queue<int> one({1, 3, 5});
+          std::queue<int> two({2, 4, 6});
+          std::queue<int> result = binary_merge(one, two);
+          CHECK(result == std::queue<int>({1, 2, 3, 4, 5, 6}));
+      }
+
+      {
+        //Merging non-empty queue with a empty queue
+           std::queue<int> one({1, 3, 5});
+           std::queue<int> two;
+           std::queue<int> result = binary_merge(one, two);
+           CHECK(result == std::queue<int>({1, 3, 5}));
+      }
+
+       {
+        //Merging two empty queues
+           std::queue<int> one;
+           std::queue<int> two;
+           std::queue<int> result = binary_merge(one, two);
+           CHECK(result.empty());
+     }
+
+      {
+        //Merging two non-empty queues with repeated elements 
+         std::queue<int> one({1, 2, 2});
+          std::queue<int> two({1, 3});
+          std::queue<int> result = binary_merge(one, two);
+          CHECK(result == std::queue<int>({1, 1, 2, 2, 3}));
+       }
+
+       {
+        //Attempting to merge two queues with unsorted elements, expecting to a runtime error
+        //and catching the expected runtime error when merging unsorted queues 
+            std::queue<int> one({1, 3, 2});
+            std::queue<int> two({4, 5, 6});
+            try {
+            binary_merge(one, two);
+
+           CHECK(false);
+         } catch (const std::runtime_error& e) {
+        
+ }
+ }
+   }
+
+  STUDENT_TEST("more binary_merge")
+ {
+      BENCHMARK("binary_merge")
+    {
+        //Adjust sizes as needed
+    std::vector<int> sizes = {8, 16, 32, 64};  
+          auto measure_time = [](int size) {
+          std::queue<int> one, two;
+
+          // Fill queues with sorted values
+          for (int i = 1; i <= size; ++i) {
+               one.push(i);
+               two.push(i * 2);
+          }
+           //Measuring the execution time
+           auto start_time = std::chrono::high_resolution_clock::now();
+           auto result = binary_merge(one, two);
+           auto end_time = std::chrono::high_resolution_clock::now();
+
+         // Output the size of n along with the execution time
+          auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+          std::cout << "n = " << result.size() << ", time = " << duration << " microseconds" << std::endl;
+     };
+
+ };
+ }
+
+
+std::queue<int> naive_multi_merge(std::vector<std::queue<int>> const& all)
+{
+    //creates an empty queue to store the result of merging 
+    //and iterates through each of the queue in the vector
+    std::queue<int> result;
+    for (std::queue<int> const& q : all)
+    {
+        //Merging the current queue with an accumalted results using the binary_merge
+        result = binary_merge(q, result);
+    }
+    //return merge queue
+    return result;
+}
+
+std::queue<int> fill_queue(std::vector<int> const& v)
+{
+    //creates an empty queue to store the results
+    //and it iterates through each integer in input vector and pushing the current integer onto the queue
+    std::queue<int> result;
+    for (int i : v)
+        result.push(i);
+    //return the filled queue
+    return result;
+}
+
+PROVIDED_TEST("naive_multi_merge")
+{
+    // check merging an empty list of queues
+    CHECK(
+        naive_multi_merge(std::vector<std::queue<int>>{}) == std::queue<int>{});
+
+    // check merging three sorted queues
+    std::queue<int> q1 = fill_queue({0, 1, 2, 3, 4});
+    std::queue<int> q2 = fill_queue({5, 6, 7, 8});
+    std::queue<int> q3 = fill_queue({2, 4, 6, 8});
+
+    std::vector<std::queue<int>> sorted = {q1, q2, q3};
+    std::queue<int> expected =
+        fill_queue({0, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8});
+
+    CHECK(naive_multi_merge(sorted) == expected);
+
+    // check merging unsorted queues
+    std::queue<int> q4 = fill_queue({8, 6, 4, 2});
+    std::vector<std::queue<int>> unsorted = {q1, q4};
+
+    CHECK_THROWS(naive_multi_merge(unsorted));
+}
+
+STUDENT_TEST("more naive_multi_merge")
+{
+    {
+        //checking naive_multi_merge function handling empty queue
+        std::vector<std::queue<int>> empty_queues;
+        std::queue<int> result = naive_multi_merge(empty_queues);
+        CHECK(result.empty());
+    }
+
+    {
+        //merging empty queues
+        std::vector<std::queue<int>> empty_queues(5); 
+        std::queue<int> result = naive_multi_merge(empty_queues);
+        CHECK(result.empty());
+    }
+
+    {
+        //correctly merging non-empty queues
+        std::queue<int> q1 = fill_queue({1, 2, 3, 4});
+        std::queue<int> q2 = fill_queue({2, 4, 5, 6});
+        std::vector<std::queue<int>> sorted = {q1, q2};
+        std::queue<int> expected = fill_queue({1, 2, 2, 3, 4, 4, 5, 6});
+        CHECK(naive_multi_merge(sorted) == expected);
+    }
+}
+
+STUDENT_TEST("Time naive_multi_merge")
+ {
+    //Define the number of queues
+    const int k = 5;
+    //Iterate over different sizes of queues
+    for(int n = 1000; n <= 5000; n += 1000)
+    {
+        BENCHMARK("naive_multi_merge")
+        {
+            //Create a vector of queues to be merged and then populate each queue with elements
+            std::vector<std::queue<int>> queues;
+            for(int i = 0; i < k; ++i)
+            {
+                //Populate each queue with elements based on the size of queues(n) and the number of queues (k)
+                std::queue<int> q;
+                for (int a = 0; a < n / k; ++a)
+                {
+                    q.push(i * (n / k) +a);
+                }
+                //add the populated queue to the vector of queues
+                queues.push_back(q);
+            }
+            //Calls the naive_multi_merge function with the vector queues 
+            naive_multi_merge(queues);
+            };
+        }
+    }
+
+// Extract a contiguous range of elements from a given vector. Use this
+// function to split the argument to recursive_multi_merge (the 
+// std::vector<std::queue<int>>) into two parts in order to recursively
+// merge all the queues.
+template <typename T>
+std::vector<T> extract_elements(
+    std::vector<T> const& v,        // vector to extract a range from
+    std::size_t first,              // index of first element to extract
+    std::size_t length)             // length of the range to extract
+{
+    std::vector<T> result;
+    if (first < v.size())
+    {
+        // copy as many elements as possible
+        std::size_t num_elements_to_copy = 
+            std::min(v.size(), first + length) - first;
+
+        // make sure result vector has sufficient space
+        result.resize(num_elements_to_copy);
+
+        // copy the correct amount of elements to the result
+        auto begin = std::next(v.begin(), first);
+        std::copy(begin, begin + num_elements_to_copy, result.begin());
+    }
+    return result;
+}
+
+std::queue<int> recursive_multi_merge(std::vector<std::queue<int>> const& all)
+{
+   std::queue<int> result;
+   if (all.size() == 1) {
+        // Returns a queue containing the elements of all[0]
+        std::queue<int> base_queue = all[0];
+        while (!base_queue.empty()) {
+            result.push(base_queue.front());
+            base_queue.pop();
+        }
+        return result;
+    }
+
+    // Divide the vector into left and right halves
+    std::size_t mid = all.size() / 2;
+    std::vector<std::queue<int>> left_half = extract_elements(all, 0, mid);
+    std::vector<std::queue<int>> right_half = extract_elements(all, mid, all.size() - mid);
+
+    // Recursively merge the left and right halves
+    std::queue<int> merged_left = recursive_multi_merge(left_half);
+    std::queue<int> merged_right = recursive_multi_merge(right_half);
+
+    // Merge the results using binary_merge
+    result = binary_merge(merged_left, merged_right);
+
+    return result;
+}
+
+STUDENT_TEST("Time recursive_multi_merge")
+ {
+    //Define the number of queues
+    const int k = 5;
+    //Iterate over different sizes of queues
+    for(int n = 1000; n <= 10000; n += 2000)
+    {
+            // Create a vector of input queues to be recursively merged 
+            // and populate each input queue with elements based on the current size and the number of queues
+            std::vector<std::queue<int>> input_queues;
+            for(int i = 0; i < k; ++i)
+            {
+                //Populate each queue with elements based on the size of queues(n) and the number of queues (k)
+                std::queue<int> q;
+                for (int a = i * (n / k);  a < (i + 1) * (n / k); ++a)
+                {
+                    q.push(a);
+                }
+                //Adds the populated queue to the vector of input queues
+                input_queues.push_back(q);
+            }
+            BENCHMARK(std::to_string(n))
+            { 
+                //Measuring the execution time and calculate the duration of the execution in microseconds
+                auto start_time = std::chrono::high_resolution_clock::now();
+                recursive_multi_merge(input_queues);
+                auto end_time = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+                
+                return duration;
+            };
+            }
+        }
