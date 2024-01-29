@@ -1,0 +1,113 @@
+
+#include <string>
+
+#include "catch.hpp"
+
+std::string operators_from(std::string str)
+{
+    //check if the input string is empty
+    if (str.empty()) {
+        return "";
+    }
+    //Initialize an empty string to store the results and also check if 
+    //the first charcater of string is an parentheses, bracket, or curly brace
+    //then if it is, append it to the result string
+    std::string result = "";
+    if (str[0] == '(' || str[0] == ')' || str[0] == '[' || str[0] == ']' || str[0] == '{' || str[0] == '}') {
+        result += str[0];
+    }
+    //recursively call the function with a substring starting from our second character
+    result += operators_from(str.substr(1));
+//return the results
+    return result;
+}
+
+
+bool operators_are_matched(std::string ops)
+{
+    //check if the input string is empty, and if it is, return true
+    if (ops.empty()) {
+        return true;
+    }
+    //check if the string has contains any of the vaild pairs "()", "[]","{}"
+    if (ops.find("()") != std::string::npos ||
+        ops.find("[]") != std::string::npos ||
+        ops.find("{}") != std::string::npos) {
+        
+        //find position of first occurrence of any of the vaild pairs, if "()" is not found, check for "[]"
+        //if "[]" is not found,check for "{}"
+        size_t found_pos = ops.find("()");
+        if (found_pos == std::string::npos) {
+            found_pos = ops.find("[]");
+            if (found_pos == std::string::npos) {
+                found_pos = ops.find("{}");
+            }
+        }
+        
+        //erase the found valid pair from the string and remove 2 characters starting from found_pos
+        //recursively calls the function with the modified string
+        std::string rest = ops;
+        rest.erase(found_pos, 2);  
+        return operators_are_matched(rest);
+    }
+    //no valid pairs are found in string then its going to return false
+    return false;
+}
+
+bool is_balanced(std::string str) 
+{
+    std::string ops = operators_from(str);
+    return operators_are_matched(ops);
+}
+
+char const* operators_test1 =
+    "int main() { int x = 2 * (vec[2] + 3); x = (1 + random()); }";
+char const* operators_test2 = "( ( [ a ] )";
+
+PROVIDED_TEST("Extract braces")
+{
+    CHECK(operators_from(operators_test1) == "(){([])(())}");
+    CHECK(operators_from(operators_test2) == "(([])");
+    CHECK(operators_from("") == "");
+}
+
+PROVIDED_TEST("Match braces")
+{
+    CHECK(operators_are_matched("(){([])(())}"));
+    CHECK(!operators_are_matched("(([])"));
+    CHECK(!operators_are_matched("abc"));
+    CHECK(operators_are_matched(""));
+}
+
+PROVIDED_TEST("Is balanced")
+{
+    CHECK(is_balanced(operators_test1));
+    CHECK(!is_balanced(operators_test2));
+    CHECK(is_balanced("abc"));
+    CHECK(is_balanced(""));
+}
+
+STUDENT_TEST("operators_from")
+{
+    //Contains mixed operators within a string
+    std::string test1 = "[a{b}c]d";
+    std::cout << "Test 1: " << operators_from(test1) << std::endl;
+    //Contains only parentheses, brackets, and curly braces
+    std::string test2 = "()[]{}";
+    std::cout << "Test 2: " << operators_from(test2) << std::endl;
+}
+STUDENT_TEST("operators_are_matched")
+{
+    //Properly matched parentheses, brackets, and curly braces in all test cases
+    std::string test1 = "([{}])";
+    std::cout << "Test 1: " << operators_are_matched(test1) << std::endl;
+    
+    std::string test2 = "[({})]";
+    std::cout << "Test 2: " << operators_are_matched(test2) << std::endl;
+
+    std::string test3 = "({[]})";
+    std::cout << "Test 3: " << operators_are_matched(test3) << std::endl;
+
+    std::string test4 = "{[()]}";
+    std::cout << "Test 4: " << operators_are_matched(test4) << std::endl;
+}
